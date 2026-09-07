@@ -7,7 +7,6 @@
     "start": "node server.js"
   },
   "dependencies": {
-    "openspec": "openspec/specs",
     "express": "^4.22.2"
   }
 }
