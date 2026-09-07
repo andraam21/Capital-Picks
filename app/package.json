@@ -1,0 +1,13 @@
+{
+  "name": "capital-attractions-finder",
+  "version": "1.0.0",
+  "description": "API that returns the capital and top 3 attractions for a given country",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "openspec": "openspec/specs",
+    "express": "^4.22.2"
+  }
+}
