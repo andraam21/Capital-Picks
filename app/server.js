@@ -1,61 +1,60 @@
+require('dotenv').config();
 const express = require('express');
-const app = express();
+const { GoogleGenAI } = require('@google/genai');
 
+const app = express();
 app.use(express.json());
 
-// In-memory capital & attractions database
-const CAPITAL_ATTRACTIONS_DB = {
-  "france": {
-    capital: "Paris",
-    attractions: [
-      { name: "Eiffel Tower", description: "An iconic 330-meter wrought-iron lattice tower offering panoramic city views." },
-      { name: "Louvre Museum", description: "The world's largest art museum, home to the Mona Lisa and Venus de Milo." },
-      { name: "Arc de Triomphe", description: "A monumental triumphal arch honoring those who fought and died for France." }
-    ]
-  },
-  "japan": {
-    capital: "Tokyo",
-    attractions: [
-      { name: "Senso-ji Temple", description: "Tokyo's oldest and most significant ancient Buddhist temple located in Asakusa." },
-      { name: "Tokyo Skytree", description: "A broadcasting and observation tower that is the tallest structure in Japan." },
-      { name: "Meiji Shrine", description: "A tranquil Shinto shrine dedicated to the deified spirits of Emperor Meiji." }
-    ]
-  },
-  "italy": {
-    capital: "Rome",
-    attractions: [
-      { name: "Colosseum", description: "An ancient stone amphitheater built in 80 AD for gladiatorial contests." },
-      { name: "Vatican Museums & Sistine Chapel", description: "Immense collection of art, highlighted by Michelangelo's ceiling frescoes." },
-      { name: "Pantheon", description: "A remarkably preserved ancient Roman temple featuring a massive concrete dome." }
-    ]
-  }
-};
+// Initialize Google Gen AI client using the API key from .env
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-// API Endpoint
-app.post('/api/get-attractions', (req, res) => {
+// Dynamic API Endpoint using Gemini 2.5 Flash
+app.post('/api/get-attractions', async (req, res) => {
   const { country } = req.body;
 
   if (!country || typeof country !== 'string') {
     return res.status(400).json({ error: 'Please provide a valid "country" string parameter.' });
   }
 
-  const normalizedCountry = country.trim().toLowerCase();
-  const result = CAPITAL_ATTRACTIONS_DB[normalizedCountry];
+  try {
+    const prompt = `
+    Find the capital of "${country}" and its top 3 landmark attractions.
+    Return ONLY a JSON object matching this schema (do not wrap in codeblocks or Markdown):
+    {
+      "country": "Country Name",
+      "capital": "Capital City",
+      "attractions": [
+        {
+          "name": "Attraction Name",
+          "description": "A brief 1-2 sentence description."
+        }
+      ]
+    }
+    If "${country}" is not a valid recognized country, respond with JSON: { "error": "Invalid country provided" }
+    `;
 
-  if (!result) {
-    return res.status(404).json({
-      error: `Data for "${country}" not found. Try 'France', 'Japan', or 'Italy'.`
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: prompt,
+      config: {
+        responseMimeType: 'application/json'
+      }
     });
-  }
 
-  return res.json({
-    country: country.trim(),
-    capital: result.capital,
-    attractions: result.attractions
-  });
+    const parsedData = JSON.parse(response.text);
+
+    if (parsedData.error) {
+      return res.status(404).json({ error: parsedData.error });
+    }
+
+    return res.json(parsedData);
+  } catch (error) {
+    console.error('Gemini API Error:', error);
+    return res.status(500).json({ error: 'Failed to retrieve data from Gemini API.' });
+  }
 });
 
-// Serve HTML Homepage
+// HTML Homepage with animated glassmorphism bubbles
 app.get('/', (req, res) => {
   res.send(`
 <!DOCTYPE html>
@@ -63,9 +62,9 @@ app.get('/', (req, res) => {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Capital Attractions Finder</title>
+  <title>Capital Attractions Finder (Powered by Gemini)</title>
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
     
     body {
       background: #0f172a;
@@ -78,7 +77,6 @@ app.get('/', (req, res) => {
       position: relative;
     }
 
-    /* Ambient Animated Bubbles */
     .bubble {
       position: absolute;
       border-radius: 50%;
@@ -95,7 +93,6 @@ app.get('/', (req, res) => {
       100% { transform: translateY(-30px) scale(1.08); }
     }
 
-    /* Glassmorphism Container */
     .card {
       position: relative;
       z-index: 10;
@@ -143,7 +140,6 @@ app.get('/', (req, res) => {
     }
     button:hover { opacity: 0.9; }
 
-    /* Results */
     #result { margin-top: 1.5rem; }
     .error { color: #f87171; font-size: 0.9rem; text-align: center; }
     
@@ -168,11 +164,11 @@ app.get('/', (req, res) => {
 
   <div class="card">
     <h1>Capital & Attractions</h1>
-    <p class="subtitle">Enter a country to discover its capital and top 3 spots.</p>
+    <p class="subtitle">Enter any country in the world to ask Gemini AI.</p>
 
     <form id="search-form">
       <div class="input-group">
-        <input type="text" id="country-input" placeholder="e.g. France, Japan, Italy" required>
+        <input type="text" id="country-input" placeholder="e.g. Brazil, Egypt, Iceland..." required>
         <button type="submit">Explore</button>
       </div>
     </form>
@@ -186,7 +182,7 @@ app.get('/', (req, res) => {
       const country = document.getElementById('country-input').value;
       const resultDiv = document.getElementById('result');
       
-      resultDiv.innerHTML = '<p style="text-align:center; color:#94a3b8;">Searching...</p>';
+      resultDiv.innerHTML = '<p style="text-align:center; color:#94a3b8;">Asking Gemini AI...</p>';
 
       try {
         const response = await fetch('/api/get-attractions', {
